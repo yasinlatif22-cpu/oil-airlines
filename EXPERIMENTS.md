@@ -16,5 +16,4 @@ Every run of `run_study.py` on real data adds a row. Design changes after any re
 | 2026-11-05 | val | hold10 | 42b6e5497453 | 40 trades, mean -0.574%/trade, Sharpe -0.39 | code 5489d8d |
 | 2026-11-05 | val | close_fill | 352897927753 | 52 trades, mean -0.307%/trade, Sharpe -0.32 | code 5489d8d |
 | 2026-11-05 | val | equal_weight | e8356a21270e | 52 trades, mean -0.360%/trade, Sharpe -0.35 | code 5489d8d |
-
 | 2026-11-04 | new hypothesis (not tested) | - | - | - | suggested by the results, so not evidence: continuation exists only when airlines are trading off oil (a negative trailing same-day response to USO). Testable only on data not yet examined (2026 onward), with the condition fixed in advance |
