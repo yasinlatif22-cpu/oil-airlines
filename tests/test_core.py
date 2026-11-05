@@ -1,0 +1,125 @@
+from dataclasses import replace
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from config import DEFAULT
+from data_io import build_panel, synthetic
+from engine import ReconciliationError, reconcile, run_engine
+from signals import basket, capped_weights, oil_events
+from tests.helpers import hand_market
+
+FREE = replace(DEFAULT, cost_airline_bps=0.0, cost_spy_bps=0.0, borrow_bps=0.0, beta_min=1.0, beta_max=1.0)
+
+
+def test_hand_calculated_short_trade():
+    p, idx = hand_market()
+    daily, tr = run_engine(p, FREE, idx[260], idx[-1])
+    assert len(tr) == 1
+    t = tr.iloc[0]
+    assert t.side == -1 and t.signal_date == idx[300] and t.entry_date == idx[301] and t.exit_date == idx[306]
+    # four names at 25% of a $500k short: -125k each. Open 50 -> close 49 (+2.5k each); close 49 -> exit open 48 (+2.5k each)
+    assert t.air_pnl == pytest.approx(4 * 5000.0)
+    assert t.hedge_pnl == pytest.approx(0.0) and t.net_pnl == pytest.approx(20000.0)
+    assert reconcile(daily, tr, FREE) == pytest.approx(0, abs=1e-6)
+
+
+def test_costs_and_borrow_by_hand():
+    p, idx = hand_market()
+    spec = replace(FREE, cost_airline_bps=10.0, cost_spy_bps=2.0, borrow_bps=50.0)
+    daily, tr = run_engine(p, spec, idx[260], idx[-1])
+    t = tr.iloc[0]
+    entry = 0.001 * 500_000 + 0.0002 * 500_000
+    exit_ = 0.001 * 4 * 125_000 * 0.98 * (48 / 49) + 0.0002 * 500_000
+    assert t.costs == pytest.approx(entry + exit_)
+    nights = sum((idx[k + 1] - idx[k]).days for k in range(301, 306))          # closes s+1 .. s+5 are held
+    assert t.borrow == pytest.approx(4 * 125_000 * 0.98 * 0.005 * nights / 365)
+    assert reconcile(daily, tr, spec) == pytest.approx(0, abs=1e-6)
+
+
+def test_signal_uses_past_volatility_only():
+    p, idx = hand_market()
+    ev = oil_events(p, DEFAULT)
+    q = build_panel(*_perturbed_future(p, 301))
+    ev2 = oil_events(q, DEFAULT)
+    pd.testing.assert_frame_equal(ev.iloc[:301], ev2.iloc[:301])
+    assert ev.side.iloc[300] == -1 and (ev.side.iloc[200:300] == 0).all()
+
+
+def _perturbed_future(p, cut, seed=0):
+    rng = np.random.default_rng(seed)
+    stocks, etf = [], []
+    for k in p.close.columns:
+        f = pd.DataFrame({"date": p.dates, "permno": k, "ticker": p.ticker[k], "open": p.open[k], "close": p.close[k], "ret": p.ret[k],
+                          "div": p.div[k], "mktcap": p.mktcap[k]})
+        m = rng.uniform(0.5, 2.0, len(f) - cut)
+        for c in ("open", "close", "mktcap"):
+            f.loc[f.index[cut:], c] = f[c].iloc[cut:].to_numpy() * m
+        f.loc[f.index[cut:], "ret"] = rng.normal(0, 0.05, len(f) - cut)
+        stocks.append(f)
+    for tk in ("USO", "SPY"):
+        f = pd.DataFrame({"date": p.dates, "ticker": tk, **{c: p.etf[c][tk] for c in ("open", "close", "ret", "div")}})
+        f.loc[f.index[cut:], "ret"] = rng.normal(0, 0.05, len(f) - cut)
+        etf.append(f)
+    return pd.concat(stocks, ignore_index=True), pd.concat(etf, ignore_index=True)
+
+
+def test_future_data_cannot_change_the_past_ledger():
+    s, e = synthetic(seed=3, continuation=0.5)
+    p = build_panel(s, e)
+    daily, tr = run_engine(p, DEFAULT, p.dates[300], p.dates[-1])
+    it = daily.in_trade.to_numpy()
+    held = np.flatnonzero((it == 1) & (np.r_[0, it[:-1]] == 1))   # marked from a held close: a peek at the next day would show
+    for k, j in enumerate(held[[0, len(held) // 2, -1]]):
+        cut = 300 + j + 1                                    # first perturbed session follows a close at which a position is held
+        if cut >= len(p.dates) - 2:
+            continue
+        q = build_panel(*_perturbed_future(p, cut, seed=k))
+        d2, _ = run_engine(q, DEFAULT, p.dates[300], p.dates[-1])
+        pd.testing.assert_frame_equal(daily.iloc[: j + 1], d2.iloc[: j + 1])
+
+
+def test_basket_is_point_in_time_and_capped():
+    p, idx = hand_market(caps=(4e8, 1e9, 2e9, 3e9, 4e9))       # the first name is below $500M and is excluded
+    w = basket(p, 300, DEFAULT)
+    assert 1 not in w.index and w.max() <= 0.25 + 1e-12 and w.sum() == pytest.approx(1.0)
+    w3 = capped_weights(pd.Series([1.0, 2.0, 3.0]), 0.25)       # three names: the cap becomes one third
+    assert np.allclose(w3, 1 / 3)
+    p2, _ = hand_market(caps=(1e9, 1e9))
+    assert basket(p2, 300, DEFAULT).empty                       # fewer than three names: no trade
+
+
+def test_a_name_leaving_crsp_mid_trade_goes_to_cash_with_its_delisting_return():
+    s0, e0 = synthetic(seed=5, continuation=0.0)
+    p0 = build_panel(s0, e0)
+    _, t0 = run_engine(p0, DEFAULT, p0.dates[300], p0.dates[-1])
+    t = next(r for r in t0.itertuples() if "AIR0" in r.tickers.split(","))      # a trade holding the first airline
+    day = p0.dates.get_loc(t.entry_date) + 2                                     # it leaves CRSP two sessions into the trade
+    s, e = synthetic(seed=5, continuation=0.0, delist=(0, day))
+    p = build_panel(s, e)
+    daily, tr = run_engine(p, DEFAULT, p.dates[300], p.dates[-1])
+    reconcile(daily, tr, DEFAULT)
+    hit = tr[tr.entry_date == t.entry_date].iloc[0]
+    assert hit.delisted == 1                                                     # recorded, and its value moved to cash
+    assert hit.air_pnl != pytest.approx(t.air_pnl)                               # the -50% delisting return was booked
+
+
+def test_reconcile_rejects_non_finite_values():
+    p, idx = hand_market()
+    daily, tr = run_engine(p, FREE, idx[260], idx[-1])
+    bad = daily.copy(); bad.iloc[-1, bad.columns.get_loc("equity")] = np.nan
+    with pytest.raises(ReconciliationError):
+        reconcile(bad, tr, FREE)
+
+
+def test_planted_under_reaction_is_found_and_null_is_not():
+    # predetermined seeds; a loose check that the engine can see a planted effect, not a significance requirement
+    def mean_trade(cont, seed):
+        s, e = synthetic(seed=seed, n=2000, continuation=cont)
+        p = build_panel(s, e)
+        _, tr = run_engine(p, DEFAULT, p.dates[300], p.dates[-1])
+        return tr.pnl_pct.mean()
+    planted = [mean_trade(1.0, k) for k in (11, 12, 13)]
+    null = [mean_trade(0.0, k) for k in (11, 12, 13)]
+    assert all(x > 0 for x in planted) and np.mean(planted) > np.mean(null) + 0.004
