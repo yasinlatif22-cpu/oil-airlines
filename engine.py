@@ -11,8 +11,9 @@ Day by day (session d):
   4. Borrow is charged on short market value for each night that follows a close at which a position is held.
   5. At the close, a new order is created if an event occurs while flat; it fills `fill_lag` sessions later.
 On CRSP's delisting day a held stock is marked with that day's return (which includes the delisting return) and its value
-moves to cash; the event is recorded. This uses CRSP's flag, not missing data, because CRSP can reuse an identifier after a gap
-(AMR's permno later became AAL's). As a fallback, a held stock with no return and no later data also moves to cash; a missing
+moves to cash; the event is recorded. This uses the flag, not missing data, because CRSP can resume an identifier after a gap
+(AMR's permno later became AAL's; Spirit's after its old shares were cancelled). ingest.py also flags the last row before any
+gap longer than spec.gap_sessions and gives later rows a new key (data_io.split_at_gaps). As a fallback, a held stock with no return and no later data also moves to cash; a missing
 return with later data and no delisting flag (a halt) counts as 0.
 A name in the basket without a fill price on the entry day is dropped and the remaining weights are rescaled; the count is recorded.
 Trade P&L reconciles to the change in equity (no interest on cash), or the run fails."""
@@ -55,7 +56,7 @@ def run_engine(panel, spec, start, end, fill_lag=1):
                 o = (panel.etf["open"]["SPY"] if key == "SPY" else panel.open[key]).iloc[i]
                 pc = (panel.etf["close"]["SPY"] if key == "SPY" else panel.close[key]).iloc[i - 1]
                 dv = (panel.etf["div"]["SPY"] if key == "SPY" else panel.div[key]).iloc[i]
-                if np.isfinite(o) and np.isfinite(pc) and pc > 0:
+                if np.isfinite(o) and o > 0 and np.isfinite(pc) and pc > 0:     # CRSP delisting rows carry price 0
                     r = (o + dv) / pc - 1
             if not np.isfinite(r):
                 if key != "SPY" and (later[key] is None or later[key] < d):
@@ -96,7 +97,7 @@ def run_engine(panel, spec, start, end, fill_lag=1):
                     for key in pos:
                         o = (panel.etf["open"]["SPY"] if key == "SPY" else panel.open[key]).iloc[i]
                         c_ = (panel.etf["close"]["SPY"] if key == "SPY" else panel.close[key]).iloc[i]
-                        pnl = pos[key] * (c_ / o - 1) if np.isfinite(c_) and o > 0 else 0.0
+                        pnl = pos[key] * (c_ / o - 1) if np.isfinite(c_) and c_ > 0 and o > 0 else 0.0
                         pos[key] += pnl
                         cur["air_pnl" if key != "SPY" else "hedge_pnl"] += pnl
         if exit_now and cur is not None and not pos:

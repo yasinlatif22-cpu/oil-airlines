@@ -28,6 +28,25 @@ class Panel:
     etf: dict                 # field -> DataFrame dates x {USO, SPY}
 
 
+def split_at_gaps(stocks, dates, gap_sessions):
+    """CRSP can leave a permno without rows for months and then resume it for a different claim (AMR -> AAL; Spirit's old
+    equity, cancelled in bankruptcy -> FLYY), with no delisting flag at the gap. Where a stock has no row for more than
+    gap_sessions sessions, its last row before the gap is flagged as an exit (delist = 1, gap_exit = 1) and later rows get a new
+    key, permno + 1,000,000 x segment number. crsp_permno keeps the original identifier."""
+    s = stocks.sort_values(["permno", "date"]).copy()
+    pos = pd.Series(np.searchsorted(dates.values, pd.to_datetime(s.date).values), index=s.index)
+    jump = pos.groupby(s.permno).diff().fillna(1) - 1                     # sessions with no row before this one
+    new = jump > gap_sessions
+    seg = new.astype(int).groupby(s.permno).cumsum()
+    last_before = new.groupby(s.permno).shift(-1, fill_value=False)
+    s["gap_exit"] = last_before.astype(int)
+    s["delist"] = s.get("delist", 0)
+    s.loc[last_before, "delist"] = 1
+    s["crsp_permno"] = s.permno
+    s["permno"] = s.permno + 1_000_000 * seg
+    return s
+
+
 def build_panel(stocks, etf):
     stocks = stocks.assign(date=pd.to_datetime(stocks.date))
     etf = etf.assign(date=pd.to_datetime(etf.date))

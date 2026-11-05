@@ -53,6 +53,14 @@ def main():
         print(db.raw_sql(f"select dlydelflg, count(*) as n from crsp.dsf_v2 where siccd = 4512 and dlycaldt >= '{START}' group by 1").to_string(index=False))
         print(db.raw_sql(f"select permno, ticker, siccd, sharetype, securitytype, dlycaldt, dlyprc, dlyret, dlyretx, dlydelflg from crsp.dsf_v2 "
                          f"where permno in ({QUALIFIED}) and dlycaldt between '{START}' and '{END}' and dlydelflg = 'Y' order by dlycaldt").to_string(index=False))
+        print("delisting rows in SIC 4512 outside the universe (expected: ADRs or other share types):")
+        print(db.raw_sql(f"select permno, ticker, sharetype, securitytype, usincflg, dlycaldt from crsp.dsf_v2 where siccd = 4512 and "
+                         f"dlycaldt >= '{START}' and dlydelflg = 'Y' and permno not in ({QUALIFIED}) order by dlycaldt").to_string(index=False))
+        print("gaps of more than two weeks between a stock's rows (treated as an exit, then a new security):")
+        print(db.raw_sql(f"select permno, prev_date, dlycaldt as next_date, prev_ticker, ticker, prev_ret from (select permno, ticker, dlycaldt, "
+                         f"lag(dlycaldt) over w as prev_date, lag(ticker) over w as prev_ticker, lag(dlyret) over w as prev_ret from crsp.dsf_v2 "
+                         f"where permno in ({QUALIFIED}) and dlycaldt between '{START}' and '{END}' window w as (partition by permno order by dlycaldt)) g "
+                         f"where dlycaldt - prev_date > 14 order by prev_date").to_string(index=False))
         return
     RAW.mkdir(parents=True, exist_ok=True)
     log = {"run_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "etf_permnos": etf, "steps": {}}

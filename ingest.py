@@ -47,9 +47,21 @@ def main():
     air["mktcap"] = market_cap(air)
     air["member"], air["delist"] = membership(air, DEFAULT)
     print("excluded by name (not scheduled passenger service):", sorted(air[air.permno.isin(DEFAULT.exclude)].ticker.unique()))
-    print("delisting days:\n", air[air.delist == 1][["date", "permno", "ticker", "ret"]].to_string(index=False))
-    air[["date", "permno", "ticker", "open", "close", "ret", "div", "mktcap", "member", "delist"]].to_csv(out / "stocks.csv", index=False)
     etf = canonical(pd.read_csv(raw / "etfs.csv"), names)
+    from data_io import split_at_gaps
+    cal = pd.DatetimeIndex(sorted(etf[etf.ticker == "SPY"].date.unique()))
+    air = split_at_gaps(air, cal, DEFAULT.gap_sessions)
+    print("\nexits (CRSP delisting flag, or the last row before a gap of more than", DEFAULT.gap_sessions, "sessions):")
+    print(air[air.delist == 1][["date", "crsp_permno", "permno", "ticker", "close", "ret", "gap_exit"]].to_string(index=False))
+    elig = air.member.eq(1) & air.mktcap.ge(DEFAULT.min_cap) & air.close.ge(DEFAULT.min_price)
+    for k, g in air.groupby("permno"):
+        if g.gap_exit.any():
+            d = g[g.gap_exit == 1].date.iloc[0]
+            near = g[(g.date <= d)].tail(DEFAULT.hold + 2)
+            print(f"  gap exit {g.ticker.iloc[-1]} {d.date()}: basket-eligible in the last {len(near)} sessions before it: "
+                  f"{bool(elig.loc[near.index].any())} (if True, a held position could miss an unrecorded post-exchange loss)")
+    air[["date", "permno", "crsp_permno", "ticker", "open", "close", "ret", "div", "mktcap", "member", "delist", "gap_exit"]].to_csv(
+        out / "stocks.csv", index=False)
     etf[["date", "ticker", "open", "close", "ret", "div"]].to_csv(out / "etf.csv", index=False)
     ff = pd.read_csv(raw / "ff_daily.csv")
     ff[["date", "rf", "mktrf"]].to_csv(out / "ff_daily.csv", index=False)
@@ -57,7 +69,7 @@ def main():
     print("\nairline universe (point-in-time, CRSP SIC 4512): names per year")
     print(air[air.member == 1].groupby(air.date.dt.year).permno.nunique().to_string())
     print("\nnames and dates:")
-    print(air.groupby(["permno", "ticker"]).date.agg(["min", "max", "count"]).sort_values("min").to_string())
+    print(air.groupby(["crsp_permno", "permno", "ticker"]).date.agg(["min", "max", "count"]).sort_values("min").to_string())
     print("\nmissing opens (airlines):", int(air.open.isna().sum()), "| missing returns:", int(air.ret.isna().sum()))
     print("ETF rows:", etf.groupby("ticker").date.agg(["min", "max", "count"]).to_string())
     big = air.assign(r=air.ret).query("abs(r) > 0.25")[["date", "ticker", "r"]]

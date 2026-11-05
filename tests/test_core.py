@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from config import DEFAULT
-from data_io import build_panel, synthetic
+from data_io import build_panel, split_at_gaps, synthetic
 from engine import ReconciliationError, reconcile, run_engine
 from signals import basket, capped_weights, oil_events
 from tests.helpers import hand_market
@@ -156,3 +156,31 @@ def test_a_reused_identifier_does_not_keep_a_delisted_position_open():
         res.append(tr[tr.entry_date == t.entry_date].iloc[0])
     assert res[0].delisted == res[1].delisted == 1                               # the flag, not missing data, closes it
     assert res[0].air_pnl == pytest.approx(res[1].air_pnl)                       # later data cannot reopen the position
+
+
+def test_a_long_gap_without_a_delisting_flag_is_an_exit_and_a_new_security():
+    s0, e0 = synthetic(seed=5, continuation=0.0)
+    p0 = build_panel(s0, e0)
+    _, t0 = run_engine(p0, DEFAULT, p0.dates[300], p0.dates[-1])
+    t = next(r for r in t0.itertuples() if "AIR0" in r.tickers.split(","))
+    day = p0.dates.get_loc(t.entry_date) + 2
+    back, _ = synthetic(seed=5, continuation=0.0, delist=(0, day, day + 60))
+    back["delist"] = 0                                          # as with AMR and Spirit: CRSP sets no flag at the gap
+    seg = split_at_gaps(back, p0.dates, DEFAULT.gap_sessions)
+    a0 = seg[seg.crsp_permno == 10000]
+    assert a0.permno.nunique() == 2 and a0.gap_exit.sum() == 1 and a0[a0.gap_exit == 1].date.iloc[0] == p0.dates[day]
+    assert split_at_gaps(s0, p0.dates, DEFAULT.gap_sessions).gap_exit.sum() == 0      # no gaps, nothing changes
+    p = build_panel(seg, e0)
+    daily, tr = run_engine(p, DEFAULT, p.dates[300], p.dates[day + 90])
+    reconcile(daily, tr, DEFAULT)
+    hit = tr[tr.entry_date == t.entry_date].iloc[0]
+    assert hit.delisted == 1 and hit.exit_date == p.dates[day + 3]          # the name left at the gap; the trade ended on schedule
+
+
+def test_an_exit_never_uses_a_zero_open_price():
+    p, idx = hand_market()
+    _, t0 = run_engine(p, FREE, idx[290], idx[-1])
+    p.open.loc[idx[306], 1] = 0.0                               # CRSP writes price 0 on delisting rows
+    _, t1 = run_engine(p, FREE, idx[290], idx[-1])
+    assert t1.net_pnl.iloc[0] == pytest.approx(t0.net_pnl.iloc[0])          # here the day's return gives the same exit value
+

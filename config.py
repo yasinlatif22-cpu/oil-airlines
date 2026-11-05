@@ -15,6 +15,9 @@ class Spec:
     # (docs/SPEC.md): Cryoport (life-science cold-chain logistics), Era Group / Bristow (helicopter services, largely for offshore
     # oil and gas), AirNet Systems (air cargo)
     exclude: tuple = (15506, 13743, 83467)
+    # a stock with no CRSP row for more than this many sessions has left the exchanges: its last row before the gap is its exit
+    # (no delisting return is available for it), and rows after the gap are treated as a different security (docs/SPEC.md)
+    gap_sessions: int = 10
     min_cap: float = 500e6        # market cap at the signal close, dollars
     min_price: float = 5.0
     weight_cap: float = 0.25

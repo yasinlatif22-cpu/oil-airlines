@@ -24,8 +24,13 @@ The null is no continuation. A reversal (the opposite sign) would also be report
     carry the common-stock attributes and filtering rows would drop the delisting return. Eligibility for a new basket uses the
     attributes on that day; a held stock is marked on CRSP's delisting day (flag `dlydelflg`) with that day's return, which
     includes the delisting return, and its value then moves to cash.
-  - *Identifier reuse:* CRSP can reuse a permno after a gap (AMR's 21020 became American Airlines Group's in December 2013), so
-    an exit is taken from the delisting flag, not from the absence of later data.
+  - *Identifier reuse and gaps:* CRSP can resume a permno after months without rows and with no delisting flag at the gap: AMR's
+    21020 stops on 2012-01-04 (NYSE delisting in bankruptcy) and resumes as American Airlines Group on 2013-12-09; Spirit's
+    12796 stops on 2024-11-15 and resumes on 2025-04-29 as new equity issued in reorganization (the old shares were cancelled).
+    So an exit is never inferred from later data. When a stock has no row for more than 10 sessions, its last row before the gap
+    is its exit and later rows are a different security. No delisting return exists for these exits, so a position held into
+    one would miss the post-exchange loss; ingest reports whether either stock was basket-eligible ($5 price, $500M cap) just
+    before its gap. A gap of 10 sessions or fewer is a trading halt: no return is earned.
   - *Limitation:* regional carriers (SkyWest, Mesa, Republic, ExpressJet, Pinnacle) mostly fly under capacity-purchase contracts
     in which the major carrier pays for fuel, so their oil exposure is weaker. They stay in the universe, as SIC 4512 records
     them; excluding them on that ground would be a judgement about exposure, which the rule does not make.
