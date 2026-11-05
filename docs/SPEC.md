@@ -30,7 +30,11 @@ The null is no continuation. A reversal (the opposite sign) would also be report
     So an exit is never inferred from later data. When a stock has no row for more than 10 sessions, its last row before the gap
     is its exit and later rows are a different security. No delisting return exists for these exits, so a position held into
     one would miss the post-exchange loss; ingest reports whether either stock was basket-eligible ($5 price, $500M cap) just
-    before its gap. A gap of 10 sessions or fewer is a trading halt: no return is earned.
+    before its gap. A gap of 10 sessions or fewer is a trading halt: no return is earned. CRSP fills such periods with empty
+    placeholder rows (no price, no return); these are dropped so the gap is visible.
+  - *Missing opening prices:* CRSP has no opening price on some days (about 110 universe stock-days, almost all 2008-2010). A
+    name without an opening price on an entry day is dropped and the rest rescaled; on an exit day the close-to-close return is
+    used. Each trade records both counts (`dropped`, `exit_no_open`).
   - *Limitation:* regional carriers (SkyWest, Mesa, Republic, ExpressJet, Pinnacle) mostly fly under capacity-purchase contracts
     in which the major carrier pays for fuel, so their oil exposure is weaker. They stay in the universe, as SIC 4512 records
     them; excluding them on that ground would be a judgement about exposure, which the rule does not make.

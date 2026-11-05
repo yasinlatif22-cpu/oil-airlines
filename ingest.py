@@ -13,6 +13,14 @@ def membership(air, spec):
     member = (common & air.siccd.eq(spec.sic) & ~air.permno.isin(spec.exclude)).astype(int)
     return member, air.dlydelflg.eq("Y").astype(int)
 
+def drop_placeholders(air):
+    """CRSP keeps rows with no price and no return while a stock is off the exchanges (primary exchange 'X'): AMR from January
+    2012 to December 2013, Spirit from November 2024 to April 2025. They carry no information, and keeping them would hide the
+    gap that marks the old security's exit (data_io.split_at_gaps). Delisting rows are kept."""
+    empty = air.ret.isna() & air.close.isna() & air.delist.eq(0)
+    return air[~empty], air[empty]
+
+
 def canonical(raw, etf_names=None):
     r = raw.rename(columns={"dlycaldt": "date"}).sort_values(["permno", "date"]).copy()
     r["date"] = pd.to_datetime(r.date)
@@ -46,10 +54,12 @@ def main():
     air = canonical(pd.read_csv(raw / "airlines.csv"))
     air["mktcap"] = market_cap(air)
     air["member"], air["delist"] = membership(air, DEFAULT)
-    print("excluded by name (not scheduled passenger service):", sorted(air[air.permno.isin(DEFAULT.exclude)].ticker.unique()))
+    print("excluded by name (not scheduled passenger service):", sorted(air[air.permno.isin(DEFAULT.exclude)].ticker.dropna().unique()))
     etf = canonical(pd.read_csv(raw / "etfs.csv"), names)
     from data_io import split_at_gaps
     cal = pd.DatetimeIndex(sorted(etf[etf.ticker == "SPY"].date.unique()))
+    air, empty = drop_placeholders(air)
+    print("\nplaceholder rows dropped (no price, no return):", empty.groupby("permno").date.agg(["min", "max", "count"]).to_string())
     air = split_at_gaps(air, cal, DEFAULT.gap_sessions)
     print("\nexits (CRSP delisting flag, or the last row before a gap of more than", DEFAULT.gap_sessions, "sessions):")
     print(air[air.delist == 1][["date", "crsp_permno", "permno", "ticker", "close", "ret", "gap_exit"]].to_string(index=False))
@@ -58,7 +68,7 @@ def main():
         if g.gap_exit.any():
             d = g[g.gap_exit == 1].date.iloc[0]
             near = g[(g.date <= d)].tail(DEFAULT.hold + 2)
-            print(f"  gap exit {g.ticker.iloc[-1]} {d.date()}: basket-eligible in the last {len(near)} sessions before it: "
+            print(f"  gap exit {g.ticker.dropna().iloc[-1]} {d.date()}: basket-eligible in the last {len(near)} sessions before it: "
                   f"{bool(elig.loc[near.index].any())} (if True, a held position could miss an unrecorded post-exchange loss)")
     air[["date", "permno", "crsp_permno", "ticker", "open", "close", "ret", "div", "mktcap", "member", "delist", "gap_exit"]].to_csv(
         out / "stocks.csv", index=False)
@@ -71,6 +81,9 @@ def main():
     print("\nnames and dates:")
     print(air.groupby(["crsp_permno", "permno", "ticker"]).date.agg(["min", "max", "count"]).sort_values("min").to_string())
     print("\nmissing opens (airlines):", int(air.open.isna().sum()), "| missing returns:", int(air.ret.isna().sum()))
+    mo = air[air.open.isna() & air.ret.notna() & air.member.eq(1)]
+    print("member rows with a return but no open, by year (an entry drops the name; an exit falls back to the close-to-close "
+          "return):\n", mo.groupby(mo.date.dt.year).size().to_string())
     print("ETF rows:", etf.groupby("ticker").date.agg(["min", "max", "count"]).to_string())
     big = air.assign(r=air.ret).query("abs(r) > 0.25")[["date", "ticker", "r"]]
     print("\n|daily return| > 25% (check these are real events, not data errors):\n", big.to_string(index=False) if len(big) else "none")

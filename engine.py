@@ -58,6 +58,8 @@ def run_engine(panel, spec, start, end, fill_lag=1):
                 dv = (panel.etf["div"]["SPY"] if key == "SPY" else panel.div[key]).iloc[i]
                 if np.isfinite(o) and o > 0 and np.isfinite(pc) and pc > 0:     # CRSP delisting rows carry price 0
                     r = (o + dv) / pc - 1
+                else:
+                    cur["exit_no_open"] += 1          # no opening price: the day's close-to-close return is used instead
             if not np.isfinite(r):
                 if key != "SPY" and (later[key] is None or later[key] < d):
                     cash += pos.pop(key)              # left CRSP: last return already included its delisting return
@@ -84,7 +86,7 @@ def run_engine(panel, spec, start, end, fill_lag=1):
                 n = spec.gross_frac * p["equity"]
                 cur = dict(signal_date=p["date"], side=p["side"], z=p["z"], oil_ret=p["oil_ret"], names=len(w), dropped=dropped,
                            beta=p["beta"], entry_date=d, entry_i=i, exit_i=i + spec.hold, equity_basis=p["equity"], costs=0.0,
-                           borrow=0.0, air_pnl=0.0, hedge_pnl=0.0, delisted=0, tickers=",".join(str(panel.ticker.get(k, k)) for k in w.index))
+                           borrow=0.0, air_pnl=0.0, hedge_pnl=0.0, delisted=0, exit_no_open=0, tickers=",".join(str(panel.ticker.get(k, k)) for k in w.index))
                 legs = {k: p["side"] * n * w[k] for k in w.index}
                 legs["SPY"] = -p["side"] * p["beta"] * n
                 for key, v in legs.items():

@@ -184,3 +184,15 @@ def test_an_exit_never_uses_a_zero_open_price():
     _, t1 = run_engine(p, FREE, idx[290], idx[-1])
     assert t1.net_pnl.iloc[0] == pytest.approx(t0.net_pnl.iloc[0])          # here the day's return gives the same exit value
 
+
+def test_placeholder_rows_are_dropped_so_the_gap_is_seen():
+    from ingest import drop_placeholders
+    s0, e0 = synthetic(seed=5, continuation=0.0)
+    p0 = build_panel(s0, e0)
+    s = s0.copy()
+    gap = (s.permno == 10000) & s.index.isin(s[s.permno == 10000].index[400:460])
+    s.loc[gap, ["open", "close", "ret", "mktcap"]] = float("nan")          # off-exchange: rows with nothing in them
+    kept, empty = drop_placeholders(s)
+    assert len(empty) == 60 and split_at_gaps(kept, p0.dates, DEFAULT.gap_sessions).gap_exit.sum() == 1
+    assert split_at_gaps(s, p0.dates, DEFAULT.gap_sessions).gap_exit.sum() == 0          # without dropping, the gap is hidden
+
