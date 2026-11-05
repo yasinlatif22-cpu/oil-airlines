@@ -16,6 +16,19 @@ The null is no continuation. A reversal (the opposite sign) would also be report
 - **Airlines:** every CRSP common stock (share type NS, security type EQTY, sub-type COM, US-incorporated, NYSE/AMEX/Nasdaq) with
   SIC 4512 (scheduled air transportation) **on the date in question**, so mergers, bankruptcies and new listings enter and leave
   the universe as they happened. Returns include CRSP's delisting returns.
+  - *Exclusions (fixed from company names before any returns were pulled):* three SIC 4512 stocks are not scheduled passenger
+    carriers and are excluded throughout: Cryoport (CYRX, permno 15506; life-science cold-chain logistics), Era Group / Bristow
+    (ERA, VTOL, permno 13743; helicopter services, largely for offshore oil and gas, so its oil exposure has the opposite sign),
+    and AirNet Systems (ANS, permno 83467; air cargo).
+  - *Delistings:* every daily row of any stock that qualified at some point is extracted, because CRSP's delisting-day rows do not
+    carry the common-stock attributes and filtering rows would drop the delisting return. Eligibility for a new basket uses the
+    attributes on that day; a held stock is marked on CRSP's delisting day (flag `dlydelflg`) with that day's return, which
+    includes the delisting return, and its value then moves to cash.
+  - *Identifier reuse:* CRSP can reuse a permno after a gap (AMR's 21020 became American Airlines Group's in December 2013), so
+    an exit is taken from the delisting flag, not from the absence of later data.
+  - *Limitation:* regional carriers (SkyWest, Mesa, Republic, ExpressJet, Pinnacle) mostly fly under capacity-purchase contracts
+    in which the major carrier pays for fuel, so their oil exposure is weaker. They stay in the universe, as SIC 4512 records
+    them; excluding them on that ground would be a judgement about exposure, which the rule does not make.
 - **Hedge:** SPDR S&P 500 ETF (SPY). **Risk-free and market:** Fama-French daily and monthly factors.
 
 ## Signal (decided at a close, using only data up to that close)

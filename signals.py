@@ -32,7 +32,7 @@ def basket(panel, i, spec):
     """Eligible airlines at the close of session i: present in the CRSP SIC 4512 universe that day, market cap >= min_cap and
     price >= min_price at that close. Returns capped weights (empty if fewer than min_names)."""
     cap, px = panel.mktcap.iloc[i], panel.close.iloc[i]
-    ok = cap.notna() & px.notna() & (cap >= spec.min_cap) & (px >= spec.min_price)
+    ok = panel.member.iloc[i].eq(1) & cap.notna() & px.notna() & (cap >= spec.min_cap) & (px >= spec.min_price)
     names = cap.index[ok]
     if len(names) < spec.min_names:
         return pd.Series(dtype=float)

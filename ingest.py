@@ -5,6 +5,14 @@ import numpy as np
 import pandas as pd
 
 
+
+def membership(air, spec):
+    """Point-in-time universe flag (common stock with the spec's SIC that day, not excluded) and CRSP's delisting-day flag."""
+    common = (air.sharetype.eq("NS") & air.securitytype.eq("EQTY") & air.securitysubtype.eq("COM") & air.usincflg.eq("Y")
+              & air.primaryexch.isin(["N", "A", "Q"]))
+    member = (common & air.siccd.eq(spec.sic) & ~air.permno.isin(spec.exclude)).astype(int)
+    return member, air.dlydelflg.eq("Y").astype(int)
+
 def canonical(raw, etf_names=None):
     r = raw.rename(columns={"dlycaldt": "date"}).sort_values(["permno", "date"]).copy()
     r["date"] = pd.to_datetime(r.date)
@@ -34,16 +42,20 @@ def main():
     import json
     log = json.loads((raw / "extraction_log.json").read_text())
     names = {v: k for k, v in log["etf_permnos"].items()}
+    from config import DEFAULT
     air = canonical(pd.read_csv(raw / "airlines.csv"))
     air["mktcap"] = market_cap(air)
-    air[["date", "permno", "ticker", "open", "close", "ret", "div", "mktcap"]].to_csv(out / "stocks.csv", index=False)
+    air["member"], air["delist"] = membership(air, DEFAULT)
+    print("excluded by name (not scheduled passenger service):", sorted(air[air.permno.isin(DEFAULT.exclude)].ticker.unique()))
+    print("delisting days:\n", air[air.delist == 1][["date", "permno", "ticker", "ret"]].to_string(index=False))
+    air[["date", "permno", "ticker", "open", "close", "ret", "div", "mktcap", "member", "delist"]].to_csv(out / "stocks.csv", index=False)
     etf = canonical(pd.read_csv(raw / "etfs.csv"), names)
     etf[["date", "ticker", "open", "close", "ret", "div"]].to_csv(out / "etf.csv", index=False)
     ff = pd.read_csv(raw / "ff_daily.csv")
     ff[["date", "rf", "mktrf"]].to_csv(out / "ff_daily.csv", index=False)
 
     print("\nairline universe (point-in-time, CRSP SIC 4512): names per year")
-    print(air.groupby(air.date.dt.year).permno.nunique().to_string())
+    print(air[air.member == 1].groupby(air.date.dt.year).permno.nunique().to_string())
     print("\nnames and dates:")
     print(air.groupby(["permno", "ticker"]).date.agg(["min", "max", "count"]).sort_values("min").to_string())
     print("\nmissing opens (airlines):", int(air.open.isna().sum()), "| missing returns:", int(air.ret.isna().sum()))

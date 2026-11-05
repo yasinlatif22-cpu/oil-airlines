@@ -10,8 +10,10 @@ Day by day (session d):
      close first.
   4. Borrow is charged on short market value for each night that follows a close at which a position is held.
   5. At the close, a new order is created if an event occurs while flat; it fills `fill_lag` sessions later.
-A held stock with no return on d and no later data has left CRSP (merger, delisting): its last return already contains the
-delisting return, so its value moves to cash and the event is recorded. A missing return with later data (a halt) counts as 0.
+On CRSP's delisting day a held stock is marked with that day's return (which includes the delisting return) and its value
+moves to cash; the event is recorded. This uses CRSP's flag, not missing data, because CRSP can reuse an identifier after a gap
+(AMR's permno later became AAL's). As a fallback, a held stock with no return and no later data also moves to cash; a missing
+return with later data and no delisting flag (a halt) counts as 0.
 A name in the basket without a fill price on the entry day is dropped and the remaining weights are rescaled; the count is recorded.
 Trade P&L reconciles to the change in equity (no interest on cash), or the run fails."""
 import numpy as np
@@ -64,6 +66,9 @@ def run_engine(panel, spec, start, end, fill_lag=1):
             pnl = pos[key] * r
             pos[key] += pnl
             cur["air_pnl" if key != "SPY" else "hedge_pnl"] += pnl
+            if key != "SPY" and panel.delist[key].iloc[i] == 1 and not (exit_now and spec.fill == "open_next"):
+                cash += pos.pop(key)                  # CRSP delisting day: the return above includes the delisting return
+                cur["delisted"] += 1
         if exit_now:
             for key in list(pos):
                 close_out(key, pos.pop(key), cs if key == "SPY" else ca)

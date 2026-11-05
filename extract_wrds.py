@@ -3,8 +3,9 @@
   python extract_wrds.py --check     # coverage, the airline universe by year, USO/SPY identifiers, delisting flags; no prices saved
   python extract_wrds.py             # writes data/raw/*.csv and data/raw/extraction_log.json (git-ignored; do not publish)
 
-Universe: CRSP CIZ daily rows (crsp.dsf_v2) recorded with SIC 4512 and common-stock attributes on that date, 2005-06 to 2025-12,
-so membership is point-in-time. USO and SPY are found by ticker and issuer name and pulled without the common-stock filter."""
+Universe: every CRSP CIZ daily row (crsp.dsf_v2) of any stock recorded with SIC 4512 and common-stock attributes at some point in
+2005-06 to 2025-12. All rows are pulled, including delisting days (which lack those attributes, so filtering rows would drop the
+delisting return); ingest.py marks which rows are universe members, so membership stays point-in-time. USO and SPY are found by ticker and issuer name and pulled without the common-stock filter."""
 import argparse
 import datetime as dt
 import hashlib
@@ -15,7 +16,10 @@ import wrds
 
 START, END = "2005-06-01", "2025-12-31"
 COMMON = "sharetype = 'NS' and securitytype = 'EQTY' and securitysubtype = 'COM' and usincflg = 'Y' and primaryexch in ('N', 'A', 'Q')"
-FIELDS = "permno, ticker, siccd, dlycaldt, dlyprc, dlyopen, dlyclose, dlyret, dlyretx, dlycumfacpr, dlycap, shrout, dlydelflg"
+FIELDS = ("permno, ticker, siccd, sharetype, securitytype, securitysubtype, usincflg, primaryexch, dlycaldt, dlyprc, dlyopen, dlyclose, "
+          "dlyret, dlyretx, dlycumfacpr, dlycap, shrout, dlydelflg")
+# every row (including delisting days, which lack the common-stock attributes) of any stock that qualified at some point
+QUALIFIED = f"select distinct permno from crsp.dsf_v2 where siccd = 4512 and {COMMON} and dlycaldt between '{START}' and '{END}'"
 RAW = Path("data/raw")
 
 
@@ -47,13 +51,13 @@ def main():
         print(db.raw_sql(f"select permno, ticker, min(dlycaldt) as first, max(dlycaldt) as last from crsp.dsf_v2 where siccd = 4512 and {COMMON} "
                          f"and dlycaldt between '{START}' and '{END}' group by permno, ticker order by first").to_string(index=False))
         print(db.raw_sql(f"select dlydelflg, count(*) as n from crsp.dsf_v2 where siccd = 4512 and dlycaldt >= '{START}' group by 1").to_string(index=False))
-        print(db.raw_sql(f"select permno, ticker, dlycaldt, dlyprc, dlyret, dlyretx, dlydelflg from crsp.dsf_v2 where siccd = 4512 and {COMMON} "
-                         f"and dlycaldt between '{START}' and '{END}' and dlydelflg <> 'N' order by dlycaldt").to_string(index=False))
+        print(db.raw_sql(f"select permno, ticker, siccd, sharetype, securitytype, dlycaldt, dlyprc, dlyret, dlyretx, dlydelflg from crsp.dsf_v2 "
+                         f"where permno in ({QUALIFIED}) and dlycaldt between '{START}' and '{END}' and dlydelflg = 'Y' order by dlycaldt").to_string(index=False))
         return
     RAW.mkdir(parents=True, exist_ok=True)
     log = {"run_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "etf_permnos": etf, "steps": {}}
     jobs = {
-        "airlines.csv": f"select {FIELDS} from crsp.dsf_v2 where siccd = 4512 and {COMMON} and dlycaldt between '{START}' and '{END}' order by permno, dlycaldt",
+        "airlines.csv": f"select {FIELDS} from crsp.dsf_v2 where permno in ({QUALIFIED}) and dlycaldt between '{START}' and '{END}' order by permno, dlycaldt",
         "etfs.csv": f"select {FIELDS} from crsp.dsf_v2 where permno in ({etf['USO']}, {etf['SPY']}) and dlycaldt between '{START}' and '{END}' order by permno, dlycaldt",
         "ff_daily.csv": f"select date, mktrf, rf from ff.factors_daily where date between '{START}' and '{END}' order by date",
         "ff_monthly.csv": f"select date, rf from ff.factors_monthly where date between '{START}' and '{END}' order by date",

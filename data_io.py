@@ -1,10 +1,10 @@
 """Canonical panel and a synthetic generator for tests (not market data).
 
 Processed files (written by ingest.py from the licensed CRSP extract; git-ignored):
-  stocks.csv  date, permno, ticker, open, close, ret, div, mktcap   (open/close split-adjusted, not dividend-adjusted;
+  stocks.csv  date, permno, ticker, open, close, ret, div, mktcap, member, delist   (open/close split-adjusted, not dividend-adjusted;
               ret = CRSP total close-to-close return including distributions and delisting returns; div = cash per
-              split-adjusted share on the ex-date; mktcap in dollars). Only CRSP rows recorded with SIC 4512 and common-stock
-              attributes on that date are present, so a stock is in the universe exactly when CRSP classified it so.
+              split-adjusted share on the ex-date; mktcap in dollars; member = 1 when CRSP recorded SIC 4512 and common-stock
+              attributes that day and the stock is not on the exclusion list; delist = 1 on CRSP's delisting day).
   etf.csv     date, ticker, open, close, ret, div   for USO and SPY
   rf.csv      date, rf                                (daily decimal)
 """
@@ -22,6 +22,8 @@ class Panel:
     ret: pd.DataFrame
     div: pd.DataFrame
     mktcap: pd.DataFrame
+    member: pd.DataFrame      # 1 when the row is an eligible universe member that day (point-in-time), else 0
+    delist: pd.DataFrame      # 1 on CRSP's delisting day (its return includes the delisting return)
     ticker: dict              # permno -> last ticker seen
     etf: dict                 # field -> DataFrame dates x {USO, SPY}
 
@@ -30,11 +32,13 @@ def build_panel(stocks, etf):
     stocks = stocks.assign(date=pd.to_datetime(stocks.date))
     etf = etf.assign(date=pd.to_datetime(etf.date))
     dates = pd.DatetimeIndex(sorted(etf[etf.ticker == "SPY"].date.unique()))
+    stocks = stocks.assign(member=stocks.get("member", 1), delist=stocks.get("delist", 0))
     wide = {k: stocks.pivot_table(index="date", columns="permno", values=k, aggfunc="last").reindex(dates)
-            for k in ("open", "close", "ret", "div", "mktcap")}
+            for k in ("open", "close", "ret", "div", "mktcap", "member", "delist")}
     e = {k: etf.pivot_table(index="date", columns="ticker", values=k, aggfunc="last").reindex(dates) for k in ("open", "close", "ret", "div")}
     tick = stocks.sort_values("date").groupby("permno").ticker.last().to_dict()
-    return Panel(dates, wide["open"], wide["close"], wide["ret"], wide["div"].fillna(0.0), wide["mktcap"], tick, e)
+    return Panel(dates, wide["open"], wide["close"], wide["ret"], wide["div"].fillna(0.0), wide["mktcap"], wide["member"].fillna(0).astype(int),
+                 wide["delist"].fillna(0).astype(int), tick, e)
 
 
 def load_panel(stocks_path="data/processed/stocks.csv", etf_path="data/processed/etf.csv"):
@@ -70,9 +74,12 @@ def synthetic(seed=0, n=1500, k=6, oil_beta=-0.35, continuation=0.0, start="2010
         shares = rng.uniform(1e8, 6e8)
         d = pd.DataFrame({"date": idx, "permno": 10000 + j, "ticker": f"AIR{j}", "open": o, "close": c, "ret": c / prev - 1,
                           "div": 0.0, "mktcap": c * shares})
+        d["member"], d["delist"] = 1, 0
         if delist and delist[0] == j:
             s = delist[1]
             d.loc[s, "ret"] = -0.5
-            d = d.iloc[: s + 1]
+            d.loc[s, "delist"] = 1
+            relist = delist[2] if len(delist) > 2 else None        # CRSP can reuse an identifier later (AMR -> AAL)
+            d = pd.concat([d.iloc[: s + 1], d.iloc[relist:]]) if relist else d.iloc[: s + 1]
         rows.append(d)
     return pd.concat(rows, ignore_index=True), pd.concat(etf, ignore_index=True)

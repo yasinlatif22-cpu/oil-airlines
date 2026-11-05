@@ -123,3 +123,36 @@ def test_planted_under_reaction_is_found_and_null_is_not():
     planted = [mean_trade(1.0, k) for k in (11, 12, 13)]
     null = [mean_trade(0.0, k) for k in (11, 12, 13)]
     assert all(x > 0 for x in planted) and np.mean(planted) > np.mean(null) + 0.004
+
+
+def test_non_members_and_excluded_names_never_enter_the_basket():
+    p, idx = hand_market(caps=(1e9, 2e9, 3e9, 4e9, 5e9))
+    p.member.loc[idx[300], 5] = 0                              # not recorded as an eligible common stock that day
+    assert 5 not in basket(p, 300, DEFAULT).index and 5 in basket(p, 299, DEFAULT).index
+    from ingest import membership
+    raw = pd.DataFrame({"permno": [15506, 21020, 21020, 21020], "siccd": [4512, 4512, 4512, 9999],
+                        "sharetype": ["NS", "NS", None, "NS"], "securitytype": ["EQTY", "EQTY", None, "EQTY"],
+                        "securitysubtype": ["COM", "COM", None, "COM"], "usincflg": ["Y", "Y", None, "Y"],
+                        "primaryexch": ["Q", "N", None, "N"], "dlydelflg": ["N", "N", "Y", "N"]})
+    member, delist = membership(raw, DEFAULT)
+    assert member.tolist() == [0, 1, 0, 0]          # excluded by name; eligible; delisting row; another SIC that day
+    assert delist.tolist() == [0, 0, 1, 0]          # the delisting row is kept and flagged, even without the attributes
+
+
+def test_a_reused_identifier_does_not_keep_a_delisted_position_open():
+    s0, e0 = synthetic(seed=5, continuation=0.0)
+    p0 = build_panel(s0, e0)
+    _, t0 = run_engine(p0, DEFAULT, p0.dates[300], p0.dates[-1])
+    t = next(r for r in t0.itertuples() if "AIR0" in r.tickers.split(","))
+    day = p0.dates.get_loc(t.entry_date) + 2
+    gone, _ = synthetic(seed=5, continuation=0.0, delist=(0, day))
+    back, _ = synthetic(seed=5, continuation=0.0, delist=(0, day, day + 60))     # the permno reappears 60 sessions later
+    assert (back.permno == 10000).sum() > (gone.permno == 10000).sum()
+    res = []
+    for s in (gone, back):
+        p = build_panel(s, e0)
+        daily, tr = run_engine(p, DEFAULT, p.dates[300], p.dates[day + 30])
+        reconcile(daily, tr, DEFAULT)
+        res.append(tr[tr.entry_date == t.entry_date].iloc[0])
+    assert res[0].delisted == res[1].delisted == 1                               # the flag, not missing data, closes it
+    assert res[0].air_pnl == pytest.approx(res[1].air_pnl)                       # later data cannot reopen the position
