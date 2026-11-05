@@ -1,3 +1,20 @@
 {
-  "evaluations": []
+  "evaluations": [
+    {
+      "period": "val",
+      "variant": "primary",
+      "spec_hash": "7b38eeb2262b",
+      "code": "620047e",
+      "date": "2026-11-04T22:52:59",
+      "headline": "52 trades, Sharpe -0.42"
+    },
+    {
+      "period": "holdout",
+      "variant": "primary",
+      "spec_hash": "7b38eeb2262b",
+      "code": "620047e+uncommitted",
+      "date": "2026-11-04T22:52:59",
+      "headline": "32 trades, Sharpe 0.98"
+    }
+  ]
 }

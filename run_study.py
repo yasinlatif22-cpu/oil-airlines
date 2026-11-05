@@ -27,7 +27,9 @@ MANIFEST = ROOT / "evaluations.json"
 def commit():
     try:
         h = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        # the run logs (EXPERIMENTS.md, evaluations.json) are written by runs themselves and are not code
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", ".", ":!EXPERIMENTS.md", ":!evaluations.json"],
+                               cwd=ROOT, capture_output=True, text=True).stdout.strip()
         return h + ("+uncommitted" if dirty else "")
     except Exception:
         return "unknown"
