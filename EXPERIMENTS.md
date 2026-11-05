@@ -12,3 +12,9 @@ Every run of `run_study.py` on real data adds a row. Design changes after any re
 | 2026-11-04 | val | primary | 7b38eeb2262b | 52 trades, mean -0.397%/trade, Sharpe -0.42 | code 620047e+uncommitted |
 | 2026-11-04 | holdout | primary | 7b38eeb2262b | 32 trades, mean 0.797%/trade, Sharpe 0.98 | code 620047e+uncommitted |
 | 2026-11-04 | note | - | 7b38eeb2262b | - | the '+uncommitted' stamps on the val and holdout rows (and in evaluations.json) refer only to the run logs themselves (EXPERIMENTS.md, evaluations.json); no code differed from 620047e. The stamp now ignores those two files |
+| 2026-11-05 | val | hold1 | e2c84e88e27f | 74 trades, mean -0.059%/trade, Sharpe -0.17 | code 5489d8d |
+| 2026-11-05 | val | hold10 | 42b6e5497453 | 40 trades, mean -0.574%/trade, Sharpe -0.39 | code 5489d8d |
+| 2026-11-05 | val | close_fill | 352897927753 | 52 trades, mean -0.307%/trade, Sharpe -0.32 | code 5489d8d |
+| 2026-11-05 | val | equal_weight | e8356a21270e | 52 trades, mean -0.360%/trade, Sharpe -0.35 | code 5489d8d |
+
+| 2026-11-04 | new hypothesis (not tested) | - | - | - | suggested by the results, so not evidence: continuation exists only when airlines are trading off oil (a negative trailing same-day response to USO). Testable only on data not yet examined (2026 onward), with the condition fixed in advance |

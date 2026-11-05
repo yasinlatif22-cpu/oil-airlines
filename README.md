@@ -3,8 +3,26 @@
 **Question.** After a large one-day move in oil, do US airline stocks keep drifting in the direction the move implies for their
 fuel costs, net of trading costs and of the market?
 
-**Status: pre-registered, not yet run on real data.** The rule, the universe, the periods and the tests were fixed in
-[`docs/SPEC.md`](docs/SPEC.md) before any data for this project was extracted. No result exists yet.
+**Answer: inconclusive under the pre-registered criteria.** The rule, universe, periods and tests were fixed in
+[`docs/SPEC.md`](docs/SPEC.md) before any data was extracted, and nothing was changed after results were seen.
+
+| period | trades | mean net / trade | t | 95% interval |
+|---|---:|---:|---:|---|
+| development 2007-16 | 99 | +0.22% | +0.80 | [-0.32%, +0.77%] |
+| validation 2017-21 | 52 | -0.40% | -1.66 | [-0.90%, +0.05%] |
+| holdout 2022-25 | 32 | +0.80% | +2.59 | [+0.21%, +1.40%] |
+
+The holdout supports the idea, but validation contradicts it. Pooled over all three periods, the mean is +0.15% per trade
+(t 0.83). The main reason is visible in the diagnostics: in 2017-21, airline stocks stopped moving against oil even on the
+same day, so there was nothing to continue. Full results, diagnostics and the declared variants are in
+[`docs/RESULTS.md`](docs/RESULTS.md).
+
+**Data handling found along the way** (each fixed from identifiers and dates before any returns were examined, and
+logged in `EXPERIMENTS.md`):
+- Three stocks in CRSP's airline industry code are not passenger airlines: Cryoport, Era/Bristow and AirNet.
+- CRSP's delisting-day rows lack the attributes a common-stock filter checks, so they are kept explicitly.
+- AMR's and Spirit's identifiers resume after bankruptcy for a different security (AAL; Spirit's new equity, after the old
+  shares were cancelled), with empty placeholder rows between.
 
 ## The rule in one paragraph
 At each close, the oil move is the day's return on the United States Oil Fund (USO) divided by its standard deviation over the
@@ -33,11 +51,13 @@ python extract_wrds.py --check                # universe by year, USO/SPY identi
 python extract_wrds.py                        # data/raw/ (git-ignored)
 python ingest.py                              # data/processed/ and a data-quality report
 python run_study.py --period dev              # development
+python run_study.py --period val --reproduce --out results_check      # recorded evaluations rerun only as labelled reproductions
+python diagnostics.py                         # the pre-stated diagnostics for the recorded runs
 ```
 
 ## Layout
 `config.py` frozen specification and hash; `signals.py` oil events, basket and hedge ratio; `engine.py` dollar ledger with
-next-open fills, costs, borrow, distributions and delisting; `metrics.py`; `run_study.py` evaluations; `extract_wrds.py`,
+next-open fills, costs, borrow, distributions and delisting; `metrics.py`; `run_study.py` evaluations; `diagnostics.py`; `extract_wrds.py`,
 `ingest.py`, `data_io.py` data; `tests/`; `docs/`.
 
 Data note: CRSP and Fama-French data are licensed through WRDS; this repository contains no such data. Wharton Research Data

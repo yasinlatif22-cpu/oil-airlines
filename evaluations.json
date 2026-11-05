@@ -15,6 +15,38 @@
       "code": "620047e+uncommitted",
       "date": "2026-11-04T22:52:59",
       "headline": "32 trades, Sharpe 0.98"
+    },
+    {
+      "period": "val",
+      "variant": "hold1",
+      "spec_hash": "e2c84e88e27f",
+      "code": "5489d8d",
+      "date": "2026-11-05T03:54:47",
+      "headline": "74 trades, Sharpe -0.17"
+    },
+    {
+      "period": "val",
+      "variant": "hold10",
+      "spec_hash": "42b6e5497453",
+      "code": "5489d8d",
+      "date": "2026-11-05T03:54:48",
+      "headline": "40 trades, Sharpe -0.39"
+    },
+    {
+      "period": "val",
+      "variant": "close_fill",
+      "spec_hash": "352897927753",
+      "code": "5489d8d",
+      "date": "2026-11-05T03:54:49",
+      "headline": "52 trades, Sharpe -0.32"
+    },
+    {
+      "period": "val",
+      "variant": "equal_weight",
+      "spec_hash": "e8356a21270e",
+      "code": "5489d8d",
+      "date": "2026-11-05T03:54:50",
+      "headline": "52 trades, Sharpe -0.35"
     }
   ]
 }
