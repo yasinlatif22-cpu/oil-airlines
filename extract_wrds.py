@@ -25,8 +25,9 @@ def etf_permnos(db):
     df = db.raw_sql(q)
     print(df.to_string(index=False))
     pick = {}
-    for tk, name in (("USO", "UNITED STATES OIL"), ("SPY", "SPDR S&P 500")):
-        c = df[(df.ticker == tk) & df.issuernm.str.upper().str.contains(name, na=False)].permno.unique()
+    squash = df.issuernm.fillna("").str.upper().str.replace(r"[^A-Z0-9]", "", regex=True)   # CRSP writes "SPDR S & P 500 E T F TRUST"
+    for tk, name in (("USO", "UNITEDSTATESOIL"), ("SPY", "SPDRSP500")):
+        c = df[(df.ticker == tk) & squash.str.contains(name)].permno.unique()
         if len(c) != 1:
             raise SystemExit(f"{tk}: expected one permno for issuer '{name}', found {list(c)}; inspect the table above")
         pick[tk] = int(c[0])
