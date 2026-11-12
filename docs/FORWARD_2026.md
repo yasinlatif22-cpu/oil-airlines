@@ -43,8 +43,8 @@ likely miss. So the universe step below is a **procedure to run and freeze**, no
   period. If it does not, substitute: SPY's own daily return (already pulled as the hedge instrument) as the market
   factor, and a FRED Treasury-bill series (e.g. `DTB3`) as the risk-free rate -- consistent with how
   `financial-models`' WACC sourced its risk-free rate from FRED and `payments-earnings-event-study` sourced its
-  risk-free rate from a public series rather than a proprietary one this session. This fallback choice is fixed now,
-  not decided after seeing which table is available.
+  risk-free rate from a public series rather than a proprietary one, both on 2026-11-11. This fallback choice is
+  fixed now, not decided after seeing which table is available.
 - **Universe (airlines in scope):** not a hand-picked list. Procedure, to be executed and frozen as its own logged
   step, with no returns pulled until the resulting list is written down:
   1. Query SEC EDGAR's company search for SIC code 4512 ("Air Transportation, Scheduled"), as of a stated freeze
@@ -137,9 +137,9 @@ described as thin evidence, not as confirmation.
   reduction in data quality from the primary periods, not a stylistic difference.
 - Yahoo Finance is an unlicensed source (see "Data source" above) whose prices can be revised and which carries no
   delisting-return concept; a name that delists mid-period would need a manual check against a primary source (e.g.
-  an 8-K) rather than relying on the price feed to reflect it, the same kind of check already used for Visa's share
-  count in `financial-models` this session. Its adjusted-price convention also differs from CRSP's, so returns from
-  the two sources are not a strict like-for-like comparison even where the same economic event is involved.
+  an 8-K) rather than relying on the price feed to reflect it. Its adjusted-price convention also differs from
+  CRSP's, so returns from the two sources are not a strict like-for-like comparison even where the same economic
+  event is involved.
 - If the market/risk-free fallback (SPY return, FRED T-bill) is used instead of the Fama-French factors every prior
   period used, the market-beta diagnostic in `docs/SPEC.md` is not computed on an identical factor definition to
   2007-2025, and that difference is reported alongside any beta number for this period.
