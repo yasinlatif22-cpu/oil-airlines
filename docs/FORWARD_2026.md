@@ -41,10 +41,8 @@ likely miss. So the universe step below is a **procedure to run and freeze**, no
   `ff.factors_daily` / `ff.factors_monthly` (a different table, and a different update cadence, than the CRSP CIZ
   tables that cap at 2025-12-31) already covers 2026. If it does, use it unchanged -- same source as every prior
   period. If it does not, substitute: SPY's own daily return (already pulled as the hedge instrument) as the market
-  factor, and a FRED Treasury-bill series (e.g. `DTB3`) as the risk-free rate -- consistent with how
-  `financial-models`' WACC sourced its risk-free rate from FRED and `payments-earnings-event-study` sourced its
-  risk-free rate from a public series rather than a proprietary one, both on 2026-11-11. This fallback choice is
-  fixed now, not decided after seeing which table is available.
+  factor, and a FRED Treasury-bill series (e.g. `DTB3`) as the risk-free rate -- both public series. This fallback
+  choice is fixed now, not decided after seeing which table is available.
 - **Universe (airlines in scope):** not a hand-picked list. Procedure, to be executed and frozen as its own logged
   step, with no returns pulled until the resulting list is written down:
   1. Query SEC EDGAR's company search for SIC code 4512 ("Air Transportation, Scheduled"), as of a stated freeze
