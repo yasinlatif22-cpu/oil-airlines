@@ -12,6 +12,16 @@ fuel costs, net of trading costs and of the market?
 | validation 2017-21 | 52 | -0.40% | -1.66 | [-0.90%, +0.05%] |
 | holdout 2022-25 | 32 | +0.80% | +2.59 | [+0.21%, +1.40%] |
 
+![Dot-and-whisker chart of mean net return per trade with 95% intervals for the development, validation and holdout periods, with a dashed zero line. Development and holdout estimates are positive, validation is negative, and only the holdout interval excludes zero.](docs/img/period_estimates.png)
+*Mean net return per trade with its 95% interval, one row per evaluation period, from the table above. Validation is negative and
+holdout is positive, so the periods disagree; only the holdout interval excludes zero.*
+
+**Try it without WRDS access** (synthetic data, an engine demo and not evidence):
+```bash
+pip install -r requirements.txt
+python run_study.py --period synthetic
+```
+
 The holdout supports the idea, but validation contradicts it. Pooled over all three periods, the mean is +0.15% per trade
 (t 0.83). The main reason is visible in the diagnostics: in 2017-21, airline stocks stopped moving against oil even on the
 same day, so there was nothing to continue. Full results, diagnostics and the declared variants are in
